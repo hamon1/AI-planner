@@ -1,0 +1,141 @@
+.page {
+  min-height: 100vh;
+  background: #0f0f0f;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #e5e5e5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wrap {
+  width: 100%;
+  max-width: 360px;
+  padding: 32px 24px;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #f97316;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #fff;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #666;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.input {
+  width: 100%;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #e5e5e5;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+  letter-spacing: 0.05em;
+}
+
+.input::placeholder { color: #444; }
+.input:focus { border-color: #f97316; }
+
+.submitBtn {
+  background: #f97316;
+  color: #fff;
+  border: none;
+  padding: 13px 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.submitBtn:hover { background: #ea6b0e; }
+.submitBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.error {
+  font-size: 12px;
+  color: #ef4444;
+  letter-spacing: 0.02em;
+}
+
+.exitWrap {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid #222;
+}
+
+.exitLabel {
+  font-size: 10px;
+  color: #444;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.exitBtn {
+  background: none;
+  border: 1px solid #333;
+  color: #666;
+  padding: 8px 16px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.exitBtn:hover { color: #e5e5e5; border-color: #666; }
+
+.statusActive {
+  font-size: 11px;
+  color: #f97316;
+  letter-spacing: 0.04em;
+  margin-bottom: 12px;
+}
+
+.backLink {
+  display: inline-block;
+  font-size: 11px;
+  color: #444;
+  text-decoration: none;
+  letter-spacing: 0.06em;
+  margin-top: 20px;
+  transition: color 0.12s;
+}
+
+.backLink:hover { color: #888; }

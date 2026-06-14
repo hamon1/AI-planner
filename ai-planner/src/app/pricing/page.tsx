@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import s from "./pricing.module.css";
 
@@ -18,8 +19,9 @@ const PRO_FEATURES = [
     "히스토리 저장 (로컬)",
     "우선순위 분석",
     "에너지 맵",
-    "클라우드 히스토리 (준비중)",
-    "기기 간 동기화 (준비중)",
+    "체크리스트 자동 생성",
+    "실행률 분석",
+    "AI 주간 피드백",
 ];
 
 const FAQS = [
@@ -31,6 +33,11 @@ const FAQS = [
 export default function PricingPage() {
     const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
     const [openFaq, setOpenFaq] = useState<number | null>(null);
+    const router = useRouter();
+
+    const handleProStart = () => {
+        router.push("/login?redirect=/pricing");
+    };
 
     const monthlyPrice  = 4900;
     const annualTotal   = 39000;
@@ -103,7 +110,7 @@ export default function PricingPage() {
                                 </li>
                             ))}
                         </ul>
-                        <button className={s.proBtn}>
+                        <button className={s.proBtn} onClick={handleProStart}>
                             Pro 시작하기 →
                         </button>
                         {billing === "annual" && (

@@ -503,8 +503,8 @@
 ───────────────────────────── */
 .energyGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  border: 2px solid var(--border);
+  /* grid-template-columns: 1fr 1fr; */
+  /* border: 2px solid var(--border); */
   margin-bottom: 14px;
 }
 
@@ -514,7 +514,7 @@
 
 .energyCellBorder {
   composes: energyCell;
-  border-right: 2px solid var(--border);
+  /* border-right: 2px solid var(--border); */
 }
 
 .energyCellLabel {
@@ -534,7 +534,7 @@
 .adviceBox {
   padding: 16px;
   background: var(--accent-surface);
-  border: 2px solid var(--border);
+  border: 1.5px solid var(--border);
 }
 
 .adviceLabel {
@@ -1002,3 +1002,149 @@
 }
 
 .modalDismiss:hover { color: var(--ink); }
+
+/* ─────────────────────────────
+   Pro Badge
+───────────────────────────── */
+.proBadge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent-ink);
+  background: var(--accent-surface);
+  padding: 3px 8px;
+  border-radius: 3px;
+}
+
+.devBadge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #f97316;
+  background: #1a0e00;
+  border: 1px solid #f97316;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+/* ─────────────────────────────
+   Checklist Tab Badge
+───────────────────────────── */
+.clBadge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--accent-surface);
+  color: var(--accent-ink);
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+/* ─────────────────────────────
+   Checklist
+───────────────────────────── */
+.clProgress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.clProgressBar {
+  flex: 1;
+  height: 6px;
+  background: var(--border-soft);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.clProgressFill {
+  height: 100%;
+  background: var(--accent-hover);
+  border-radius: 2px;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.clProgressLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  font-family: monospace;
+}
+
+.clList {
+  border: 1.5px solid var(--border);
+  padding: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.clItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.clItem:last-child { border-bottom: none; }
+
+.clItem:hover { background: var(--accent-surface); }
+
+.clItemDone {
+  composes: clItem;
+  background: #fafaf9;
+}
+
+.clItemDone:hover { background: #f3f3f0; }
+
+.clCheck {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--border-soft);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: transparent;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.clCheckDone {
+  composes: clCheck;
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+  color: #fff;
+}
+
+.clLabel {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.35;
+  text-align: left;
+}
+
+.clLabelDone {
+  composes: clLabel;
+  color: var(--ink-subtle);
+  text-decoration: line-through;
+  text-decoration-color: #ccc;
+  font-weight: 400;
+}
