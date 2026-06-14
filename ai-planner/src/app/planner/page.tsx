@@ -1,164 +1,279 @@
 "use client";
 
-import { useState } from "react";
-import type { CSSProperties, ChangeEvent } from "react";
+import { useState, useEffect } from "react";
+import type { ChangeEvent } from "react";
+import Link from "next/link";
+import s from "./planner.module.css";
 
 type Category = keyof typeof CAT;
 type PriKey   = keyof typeof PRI;
 
 interface ScheduleItem { time: string; duration: number; task: string; category: Category; priority: PriKey; tip: string; }
 interface PriorityItem { rank: number; label: string; reason: string; emoji: string; }
-interface PlanResult {
+interface WeekTask { label: string; category: Category; priority: PriKey; }
+interface WeekDay { day: string; focus: string; energy: "high" | "medium" | "low"; tasks: WeekTask[]; tip: string; }
+
+interface DailyPlan {
     summary: string; dailyMantra: string;
     priorities: PriorityItem[];
     schedule: ScheduleItem[];
     energyMap: { peak: string; low: string; advice: string };
     promptTemplate: string;
 }
+interface WeeklyPlan {
+    summary: string; weeklyMantra: string;
+    weekGoals: PriorityItem[];
+    days: WeekDay[];
+    energyMap: { peak: string; low: string; advice: string };
+    promptTemplate: string;
+}
+type PlanResult = DailyPlan | WeeklyPlan;
+function isWeekly(p: PlanResult): p is WeeklyPlan { return "days" in p; }
 
-const CAT = { 집중: "#6366f1", 루틴: "#10b981", 휴식: "#f59e0b", 운동: "#ef4444", 학습: "#3b82f6", 업무: "#8b5cf6" } as const;
-const PRI = { high: ["높음", "#ef4444"], medium: ["중간", "#f59e0b"], low: ["낮음", "#9ca3af"] } as const;
+interface SavedPlan { id: string; createdAt: string; mode: string; role: string; goals: string; plan: PlanResult; }
+
+const STORAGE_KEY = "ai-planner-history";
+const USAGE_KEY   = "ai-planner-usage";
+const MAX_HISTORY = 20;
+const FREE_LIMIT  = 3;
+
+const CAT = { 집중: "#5046e4", 루틴: "#059669", 휴식: "#d97706", 운동: "#dc2626", 학습: "#2563eb", 업무: "#7c3aed" } as const;
+const PRI = { high: ["HIGH", "#dc2626"], medium: ["MED", "#d97706"], low: ["LOW", "#9ca3af"] } as const;
+
+function loadHistory(): SavedPlan[] {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]") as SavedPlan[]; } catch { return []; }
+}
+function saveToHistory(entry: SavedPlan): SavedPlan[] {
+    const next = [entry, ...loadHistory()].slice(0, MAX_HISTORY);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    return next;
+}
+function deleteFromHistory(id: string): SavedPlan[] {
+    const next = loadHistory().filter(p => p.id !== id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    return next;
+}
+function formatDate(iso: string) {
+    const d = new Date(iso);
+    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+function getTodayCount(): number {
+    try {
+        const raw = localStorage.getItem(USAGE_KEY);
+        if (!raw) return 0;
+        const { date, count } = JSON.parse(raw) as { date: string; count: number };
+        return new Date().toISOString().slice(0, 10) === date ? count : 0;
+    } catch { return 0; }
+}
+function incrementCount(): number {
+    const today = new Date().toISOString().slice(0, 10);
+    const next  = getTodayCount() + 1;
+    localStorage.setItem(USAGE_KEY, JSON.stringify({ date: today, count: next }));
+    return next;
+}
 
 export default function App() {
-    const [step, setStep] = useState("input");
-    const [mode, setMode] = useState("daily");
-    const [form, setForm] = useState({ role: "", goals: "", personality: "", constraints: "", wakeTime: "07:00", sleepTime: "23:00", energyType: "아침형", stressLevel: "3" });
-    const [result, setResult] = useState<PlanResult | null>(null);
-    const [error, setError] = useState("");
+    const [step, setStep]           = useState("input");
+    const [mode, setMode]           = useState("daily");
+    const [form, setForm]           = useState({ role: "", goals: "", personality: "", constraints: "", wakeTime: "07:00", sleepTime: "23:00", energyType: "아침형", stressLevel: "3" });
+    const [result, setResult]       = useState<PlanResult | null>(null);
+    const [error, setError]         = useState("");
     const [errDetail, setErrDetail] = useState("");
-    const [tab, setTab] = useState("schedule");
-    const [copied, setCopied] = useState(false);
+    const [tab, setTab]             = useState("schedule");
+    const [history, setHistory]     = useState<SavedPlan[]>([]);
+    const [copiedDay, setCopiedDay] = useState<string | null>(null);
+    const [usageCount, setUsageCount]   = useState(0);
+    const [showUpgrade, setShowUpgrade] = useState(false);
+
+    useEffect(() => {
+        setHistory(loadHistory());
+        setUsageCount(getTodayCount());
+    }, []);
 
     const upd = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
         setForm(f => ({ ...f, [e.target.name]: e.target.value }));
 
     const generate = async () => {
         if (!form.role && !form.goals) { setError("직업/역할 또는 목표를 입력해주세요."); return; }
+        if (usageCount >= FREE_LIMIT) { setShowUpgrade(true); return; }
         setError(""); setErrDetail(""); setStep("loading");
         const msg = `[${mode === "daily" ? "오늘" : "이번주"} 스케줄]\n직업:${form.role || "미입력"}\n목표:${form.goals || "미입력"}\n성향:${form.personality || "없음"}\n제약:${form.constraints || "없음"}\n기상:${form.wakeTime}/취침:${form.sleepTime}\n에너지:${form.energyType}/스트레스:${form.stressLevel}/5\nJSON만 반환`;
         try {
-            const res = await fetch("/api/plan", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: msg, mode }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-            setResult(data); setTab("schedule"); setStep("result");
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 60_000);
+            try {
+                const res  = await fetch("/api/plan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: msg, mode }), signal: controller.signal });
+                const data = await res.json() as PlanResult & { error?: string };
+                if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+                const entry: SavedPlan = { id: Date.now().toString(), createdAt: new Date().toISOString(), mode, role: form.role, goals: form.goals, plan: data };
+                setHistory(saveToHistory(entry));
+                setUsageCount(incrementCount());
+                setResult(data); setTab("schedule"); setStep("result");
+            } finally { clearTimeout(timer); }
         } catch (e) {
-            setError("스케줄 생성 중 오류가 발생했습니다.");
-            setErrDetail(e instanceof Error ? e.message : String(e));
+            const isTimeout = e instanceof DOMException && e.name === "AbortError";
+            setError(isTimeout ? "요청 시간이 초과되었습니다 (60초). 다시 시도해주세요." : "스케줄 생성 중 오류가 발생했습니다.");
+            setErrDetail(!isTimeout && e instanceof Error ? e.message : "");
             setStep("input");
         }
     };
 
-    const copyPrompt = () => {
-        navigator.clipboard.writeText(result?.promptTemplate || "");
-        setCopied(true); setTimeout(() => setCopied(false), 2000);
+    const copyDay = (d: WeekDay) => {
+        const text = `[${d.day}요일] ${d.focus}\n${d.tasks.map(t => `- ${t.label}`).join("\n")}`;
+        navigator.clipboard.writeText(text);
+        setCopiedDay(d.day);
+        setTimeout(() => setCopiedDay(null), 2000);
     };
 
-    const inp: CSSProperties = { padding: "10px 12px", borderRadius: 10, border: "1.5px solid #e5e7eb", fontSize: 14, width: "100%", boxSizing: "border-box", fontFamily: "inherit", color: "#1e1b4b", background: "#fff", outline: "none" };
-    const lbl: CSSProperties = { fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 };
+    const restorePlan = (saved: SavedPlan) => { setMode(saved.mode); setResult(saved.plan); setTab("schedule"); setStep("result"); };
+    const removePlan  = (e: React.MouseEvent, id: string) => { e.stopPropagation(); setHistory(deleteFromHistory(id)); };
 
-    if (step === "loading") return (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", fontFamily: "sans-serif" }}>
-            <style>{`@keyframes sp{to{transform:rotate(360deg)}}`}</style>
-            <div style={{ width: 44, height: 44, border: "4px solid #e0e7ff", borderTop: "4px solid #6366f1", borderRadius: "50%", animation: "sp .8s linear infinite" }} />
-            <p style={{ color: "#6366f1", fontWeight: 600, marginTop: 18 }}>AI가 맞춤 스케줄 생성 중…</p>
+    const remaining = Math.max(0, FREE_LIMIT - usageCount);
+
+    /* ── Top Bar (공통) ── */
+    const topBar = (
+        <div className={s.topBar}>
+            <span className={s.usageBadge}>남은 횟수 {remaining} / {FREE_LIMIT}</span>
+            <div className={s.topActions}>
+                <Link href="/login" className={s.topBtn}>로그인</Link>
+                <Link href="/pricing" className={s.topBtnPro}>Pro</Link>
+            </div>
         </div>
     );
 
-    if (step === "result" && result) {
-        const TABS = [["schedule", "📅 스케줄"], ["priority", "🎯 우선순위"], ["energy", "⚡ 에너지"], ["reuse", "🔁 재사용"]];
-        return (
-            <div style={{ maxWidth: 640, margin: "0 auto", padding: 16, fontFamily: "'Apple SD Gothic Neo',Arial,sans-serif", color: "#1e1b4b" }}>
-                <div style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)", borderRadius: 16, padding: 20, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div style={{ flex: 1, marginRight: 12 }}>
-                        <div style={{ fontSize: 11, color: "#a5b4fc", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.1em" }}>{mode === "daily" ? "오늘의 플랜" : "주간 플랜"}</div>
-                        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#fff", lineHeight: 1.4 }}>{result.dailyMantra}</h2>
-                        <p style={{ margin: "6px 0 0", fontSize: 12, color: "#c7d2fe", lineHeight: 1.5 }}>{result.summary}</p>
+    /* ── Upgrade Modal ── */
+    const upgradeModal = showUpgrade && (
+        <div className={s.modalOverlay} onClick={() => setShowUpgrade(false)}>
+            <div className={s.modal} onClick={e => e.stopPropagation()}>
+                <button className={s.modalClose} onClick={() => setShowUpgrade(false)}>×</button>
+                <p className={s.modalEyebrow}>무료 횟수 소진</p>
+                <h2 className={s.modalTitle}>오늘 무료 생성을<br />모두 사용했어요</h2>
+                <div className={s.planCompare}>
+                    <div className={s.planRow}>
+                        <span className={s.planName}>무료</span>
+                        <span className={s.planLimit}>하루 {FREE_LIMIT}회</span>
                     </div>
-                    <button onClick={() => setStep("input")} style={{ background: "rgba(255,255,255,.2)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>새 플랜</button>
+                    <div className={s.planRowPro}>
+                        <span className={s.planName}>Pro</span>
+                        <span className={s.planLimit}>무제한 ✓</span>
+                    </div>
                 </div>
+                <button className={s.upgradeCta}>Pro 업그레이드 — 월 4,900원</button>
+                <button className={s.modalDismiss} onClick={() => setShowUpgrade(false)}>내일 다시 시도하기</button>
+            </div>
+        </div>
+    );
 
-                <div style={{ display: "flex", gap: 4, marginBottom: 14, background: "#f1f5f9", borderRadius: 12, padding: 4 }}>
-                    {TABS.map(([id, l]) => (
-                        <button key={id} onClick={() => setTab(id)} style={{
-                            flex: 1, padding: "8px 2px", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap",
-                            background: tab === id ? "#fff" : "transparent", color: tab === id ? "#4f46e5" : "#6b7280",
-                            boxShadow: tab === id ? "0 1px 4px rgba(0,0,0,.08)" : "none"
-                        }}>{l}</button>
-                    ))}
-                </div>
+    /* ── Loading ── */
+    if (step === "loading") return (
+        <div className={s.loadingPage}>
+            <div className={s.loadingInner}>
+                <div className={s.loadingTitle}>일정 분석 중<span className={s.dot}>.</span><span className={s.dot}>.</span><span className={s.dot}>.</span></div>
+                <p className={s.loadingDesc}>{mode === "daily" ? "오늘" : "이번 주"} 하루를 설계하고 있어요</p>
+            </div>
+        </div>
+    );
 
-                <div style={{ background: "#fff", borderRadius: 16, padding: 16, border: "1.5px solid #e0e7ff", minHeight: 200 }}>
-                    {tab === "schedule" && (result.schedule || []).map((it, i) => (
-                        <div key={i} style={{ display: "flex", gap: 12, marginBottom: 14, alignItems: "flex-start" }}>
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", minWidth: 48 }}>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: "#4f46e5" }}>{it.time}</span>
-                                <span style={{ fontSize: 11, color: "#9ca3af" }}>{it.duration}분</span>
+    /* ── Result ── */
+    if (step === "result" && result) {
+        const weekly = isWeekly(result);
+        const DAILY_TABS:  [string, string][] = [["schedule", "스케줄"], ["priority", "우선순위"], ["energy", "에너지"]];
+        const WEEKLY_TABS: [string, string][] = [["week", "주간 계획"], ["goals", "목표"], ["energy", "에너지"]];
+        const TABS = weekly ? WEEKLY_TABS : DAILY_TABS;
+        const energyBg:  Record<string, string> = { high: "#dcfce7", medium: "#fef9c3", low: "#f1f5f9" };
+        const energyTxt: Record<string, string> = { high: "#166534", medium: "#854d0e", low: "#475569" };
+
+        return (
+            <div className={s.page}>
+                {upgradeModal}
+                <div className={s.wrap}>
+                    {topBar}
+                    <div className={s.resultMeta}>
+                        <span className={s.eyebrow}>{weekly ? "Weekly Plan" : "Today's Plan"}</span>
+                        <button className={s.newPlanBtn} onClick={() => setStep("input")}>새 플랜</button>
+                    </div>
+                    <h1 className={s.mantra}>{weekly ? (result as WeeklyPlan).weeklyMantra : (result as DailyPlan).dailyMantra}</h1>
+                    <p className={s.summary}>{result.summary}</p>
+                    <hr className={s.divider} />
+
+                    <div className={s.tabs}>
+                        {TABS.map(([id, label]) => (
+                            <button key={id} onClick={() => setTab(id)} className={tab === id ? s.tabBtnActive : s.tabBtn}>{label}</button>
+                        ))}
+                    </div>
+
+                    {!weekly && tab === "schedule" && (result as DailyPlan).schedule.map((it, i) => (
+                        <div key={i} className={s.scheduleItem}>
+                            <div className={s.timeCol}>
+                                <div className={s.timeText}>{it.time}</div>
+                                <div className={s.durationText}>{it.duration}분</div>
                             </div>
-                            <div style={{ flex: 1, borderLeft: `3px solid ${CAT[it.category] || "#6366f1"}`, paddingLeft: 12, paddingBottom: 10, borderBottom: "1px solid #f3f4f6" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                                    <span style={{ fontSize: 14, fontWeight: 600 }}>{it.task}</span>
-                                    {it.category && <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: (CAT[it.category] || "#6366f1") + "22", color: CAT[it.category] || "#6366f1" }}>{it.category}</span>}
-                                    {it.priority && PRI[it.priority] && <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: PRI[it.priority][1] + "22", color: PRI[it.priority][1] }}>{PRI[it.priority][0]}</span>}
+                            <div className={s.taskCol}>
+                                <div className={s.taskHeader}>
+                                    <span className={s.catDot} style={{ background: CAT[it.category] ?? "#666" }} />
+                                    <span className={s.taskName}>{it.task}</span>
+                                    <span className={s.priLabel} style={{ color: PRI[it.priority]?.[1] ?? "#999" }}>{PRI[it.priority]?.[0]}</span>
                                 </div>
-                                {it.tip && <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 0", lineHeight: 1.5 }}>💡 {it.tip}</p>}
+                                {it.tip && <p className={s.taskTip}>→ {it.tip}</p>}
                             </div>
                         </div>
                     ))}
 
-                    {tab === "priority" && (
-                        <div>
-                            <p style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>핵심 우선순위</p>
-                            {(result.priorities || []).map((p, i) => (
-                                <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: 14, background: "#f8fafc", borderRadius: 12, marginBottom: 10 }}>
-                                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14, flexShrink: 0 }}>{p.rank}</div>
-                                    <div>
-                                        <div style={{ fontWeight: 700, fontSize: 15 }}>{p.emoji} {p.label}</div>
-                                        <div style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>{p.reason}</div>
-                                    </div>
+                    {weekly && tab === "week" && (result as WeeklyPlan).days.map((d) => (
+                        <div key={d.day} className={s.weekDayCard}>
+                            <div className={s.weekDayHeader}>
+                                <div className={s.weekDayTitle}>
+                                    <span className={s.weekDayName}>{d.day}요일</span>
+                                    <span className={s.weekDayFocus}>{d.focus}</span>
                                 </div>
-                            ))}
-                        </div>
-                    )}
-
-                    {tab === "energy" && result.energyMap && (
-                        <div>
-                            <p style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>에너지 관리 전략</p>
-                            <div style={{ background: "#f8fafc", borderRadius: 12, padding: 14, marginBottom: 12 }}>
-                                {[["🔥 최고조 시간", result.energyMap.peak], ["🌙 저조 시간", result.energyMap.low]].map(([l, v]) => (
-                                    <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #e5e7eb" }}>
-                                        <span style={{ fontSize: 14, color: "#6b7280" }}>{l}</span>
-                                        <span style={{ fontSize: 14, fontWeight: 700, color: "#4f46e5" }}>{v}</span>
+                                <span className={s.weekEnergyBadge} style={{ background: energyBg[d.energy] ?? "#f1f5f9", color: energyTxt[d.energy] ?? "#475569" }}>
+                                    {d.energy === "high" ? "고에너지" : d.energy === "medium" ? "중에너지" : "저에너지"}
+                                </span>
+                            </div>
+                            <div className={s.weekTaskList}>
+                                {d.tasks.map((t, i) => (
+                                    <div key={i} className={s.weekTask}>
+                                        <span className={s.catDot} style={{ background: CAT[t.category] ?? "#666" }} />
+                                        <span className={s.weekTaskLabel}>{t.label}</span>
+                                        <span className={s.priLabel} style={{ color: PRI[t.priority]?.[1] ?? "#999" }}>{PRI[t.priority]?.[0]}</span>
                                     </div>
                                 ))}
                             </div>
-                            <div style={{ background: "#eff6ff", borderRadius: 12, padding: 14 }}>
-                                <p style={{ margin: 0, fontSize: 14, color: "#374151", lineHeight: 1.7 }}>💬 {result.energyMap.advice}</p>
+                            <div className={s.weekDayTipRow}>
+                                {d.tip && <p className={s.weekDayTip}>→ {d.tip}</p>}
+                                <button className={s.weekCopyBtn} onClick={() => copyDay(d)}>{copiedDay === d.day ? "✓ 복사됨" : "복사"}</button>
                             </div>
                         </div>
-                    )}
+                    ))}
 
-                    {tab === "reuse" && (
+                    {((!weekly && tab === "priority") || (weekly && tab === "goals")) &&
+                        (weekly ? (result as WeeklyPlan).weekGoals : (result as DailyPlan).priorities).map((p, i) => (
+                            <div key={i} className={s.priorityItem}>
+                                <span className={s.priorityRank}>{String(p.rank).padStart(2, "0")}</span>
+                                <div>
+                                    <div className={s.priorityLabel}>{p.emoji} {p.label}</div>
+                                    <div className={s.priorityReason}>{p.reason}</div>
+                                </div>
+                            </div>
+                        ))
+                    }
+
+                    {tab === "energy" && result.energyMap && (
                         <div>
-                            <p style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 14 }}>매일 재사용하는 방법</p>
-                            {[["1", "새 플랜 버튼", "달라진 목표/상황만 수정 후 재생성"], ["2", "프롬프트 복사", "아래 템플릿 복사 → Claude 새 대화에 붙여넣기"], ["3", "Projects 저장", "Claude Projects에 기본 프로필 저장 후 목표만 매일 입력"]].map(([n, t, d]) => (
-                                <div key={n} style={{ display: "flex", gap: 12, marginBottom: 14 }}>
-                                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#6366f1", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14, flexShrink: 0 }}>{n}</div>
-                                    <div><strong style={{ fontSize: 14 }}>{t}</strong><p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>{d}</p></div>
+                            <div className={s.energyGrid}>
+                                <div className={s.energyCellBorder}>
+                                    <div className={s.energyCellLabel}>PEAK</div>
+                                    <div className={s.energyCellValue}>{result.energyMap.peak}</div>
                                 </div>
-                            ))}
-                            {result.promptTemplate && <>
-                                <p style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em", margin: "16px 0 8px" }}>📋 내일 사용할 프롬프트</p>
-                                <div style={{ background: "#f1f5f9", borderRadius: 10, padding: 12, border: "1px solid #e2e8f0", marginBottom: 10 }}>
-                                    <pre style={{ margin: 0, fontSize: 12, color: "#374151", whiteSpace: "pre-wrap", lineHeight: 1.6, fontFamily: "monospace" }}>{result.promptTemplate}</pre>
+                                <div className={s.energyCell}>
+                                    <div className={s.energyCellLabel}>LOW</div>
+                                    <div className={s.energyCellValue}>{result.energyMap.low}</div>
                                 </div>
-                                <button onClick={copyPrompt} style={{ background: "#4f46e5", color: "#fff", border: "none", borderRadius: 10, padding: "10px 16px", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
-                                    {copied ? "✅ 복사됨!" : "📋 프롬프트 복사"}
-                                </button>
-                            </>}
+                            </div>
+                            <div className={s.adviceBox}>
+                                <div className={s.adviceLabel}>ADVICE</div>
+                                <p className={s.adviceText}>{result.energyMap.advice}</p>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -166,55 +281,98 @@ export default function App() {
         );
     }
 
+    /* ── Input Form ── */
     return (
-        <div style={{ maxWidth: 640, margin: "0 auto", padding: 16, fontFamily: "'Apple SD Gothic Neo',Arial,sans-serif", color: "#1e1b4b" }}>
-            <div style={{ textAlign: "center", padding: "20px 0 14px" }}>
-                <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: "#3730a3" }}>🤖 AI 맞춤 플래너</h1>
-                <p style={{ margin: "8px 0 0", color: "#6b7280", fontSize: 13 }}>Claude가 나의 상황에 맞는 최적 스케줄을 만들어드립니다</p>
-            </div>
-
-            <div style={{ display: "flex", gap: 4, marginBottom: 18, background: "#f1f5f9", borderRadius: 12, padding: 4 }}>
-                {[["daily", "📅 하루 플랜"], ["weekly", "📆 주간 플랜"]].map(([m, l]) => (
-                    <button key={m} onClick={() => setMode(m)} style={{
-                        flex: 1, padding: 10, border: "none", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 600,
-                        background: mode === m ? "#fff" : "transparent", color: mode === m ? "#4f46e5" : "#6b7280",
-                        boxShadow: mode === m ? "0 1px 4px rgba(0,0,0,.1)" : "none"
-                    }}>{l}</button>
-                ))}
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div><label style={lbl}>직업 / 역할 <span style={{ color: "#ef4444" }}>*</span></label>
-                    <input name="role" value={form.role} onChange={upd} placeholder="예: 프리랜서 개발자, 대학원생, 취준생" style={inp} /></div>
-                <div><label style={lbl}>오늘/이번 주 목표 <span style={{ color: "#ef4444" }}>*</span></label>
-                    <textarea name="goals" value={form.goals} onChange={upd} placeholder="예: 프로젝트 완성, 운동 습관, 영어 공부" rows={3} style={{ ...inp, resize: "vertical" }} /></div>
-                <div><label style={lbl}>나의 성향 / 특성</label>
-                    <input name="personality" value={form.personality} onChange={upd} placeholder="예: 집중력 짧음, 완벽주의, 저녁형" style={inp} /></div>
-                <div><label style={lbl}>제약 사항</label>
-                    <input name="constraints" value={form.constraints} onChange={upd} placeholder="예: 오후 2-4시 회의, 허리 통증" style={inp} /></div>
-                <div style={{ display: "flex", gap: 12 }}>
-                    <div style={{ flex: 1 }}><label style={lbl}>기상 시간</label><input name="wakeTime" value={form.wakeTime} onChange={upd} type="time" style={inp} /></div>
-                    <div style={{ flex: 1 }}><label style={lbl}>취침 시간</label><input name="sleepTime" value={form.sleepTime} onChange={upd} type="time" style={inp} /></div>
-                </div>
-                <div style={{ display: "flex", gap: 12 }}>
-                    <div style={{ flex: 1 }}><label style={lbl}>에너지 유형</label>
-                        <select name="energyType" value={form.energyType} onChange={upd} style={inp}>
-                            <option>아침형</option><option>저녁형</option><option>중간형</option>
-                        </select></div>
-                    <div style={{ flex: 1 }}><label style={lbl}>스트레스 수준 {form.stressLevel}/5</label>
-                        <input type="range" min="1" max="5" name="stressLevel" value={form.stressLevel} onChange={upd} style={{ width: "100%", marginTop: 10 }} /></div>
+        <div className={s.page}>
+            {upgradeModal}
+            <div className={s.wrap}>
+                {topBar}
+                <div className={s.formHeader}>
+                    <span className={s.eyebrow}>AI Planner</span>
+                    <h1 className={s.pageTitle}>오늘 하루를<br />설계하세요.</h1>
                 </div>
 
-                {error && (
-                    <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: 12 }}>
-                        <p style={{ margin: 0, color: "#dc2626", fontSize: 13, fontWeight: 600 }}>{error}</p>
-                        {errDetail && <p style={{ margin: "6px 0 0", color: "#991b1b", fontSize: 11, fontFamily: "monospace", wordBreak: "break-all" }}>{errDetail}</p>}
+                <hr className={s.divider} />
+
+                <div className={s.modeToggle}>
+                    <button className={mode === "daily" ? s.modeBtnActive : s.modeBtn} onClick={() => setMode("daily")}>하루 플랜</button>
+                    <div className={s.modeDivider} />
+                    <button className={mode === "weekly" ? s.modeBtnActive : s.modeBtn} onClick={() => setMode("weekly")}>주간 플랜</button>
+                </div>
+
+                <div className={s.fields}>
+                    <div className={s.fieldGroup}>
+                        <label className={s.label}>직업 / 역할 <span className={s.required}>*</span></label>
+                        <input name="role" value={form.role} onChange={upd} placeholder="예: 프리랜서 개발자, 대학원생, 취준생" className={s.input} />
+                    </div>
+                    <div className={s.fieldGroup}>
+                        <label className={s.label}>오늘의 목표 <span className={s.required}>*</span></label>
+                        <textarea name="goals" value={form.goals} onChange={upd} placeholder="예: 프로젝트 완성, 운동 습관, 영어 공부" rows={3} className={s.textarea} />
+                    </div>
+                    <div className={s.fieldGroup}>
+                        <label className={s.label}>성향 / 특성</label>
+                        <input name="personality" value={form.personality} onChange={upd} placeholder="예: 집중력 짧음, 완벽주의" className={s.input} />
+                    </div>
+                    <div className={s.fieldGroup}>
+                        <label className={s.label}>제약 사항</label>
+                        <input name="constraints" value={form.constraints} onChange={upd} placeholder="예: 오후 2시 회의, 허리 통증" className={s.input} />
+                    </div>
+
+                    <div className={s.fieldRow}>
+                        <div className={s.fieldGroup}>
+                            <label className={s.label}>기상 시간</label>
+                            <input type="time" name="wakeTime" value={form.wakeTime} onChange={upd} className={s.monoInput} />
+                        </div>
+                        <div className={s.fieldGroup}>
+                            <label className={s.label}>취침 시간</label>
+                            <input type="time" name="sleepTime" value={form.sleepTime} onChange={upd} className={s.monoInput} />
+                        </div>
+                    </div>
+
+                    <div className={s.fieldRow}>
+                        <div className={s.fieldGroup}>
+                            <label className={s.label}>에너지 유형</label>
+                            <select name="energyType" value={form.energyType} onChange={upd} className={s.selectInput}>
+                                <option>아침형</option><option>저녁형</option><option>중간형</option>
+                            </select>
+                        </div>
+                        <div className={s.fieldGroup}>
+                            <label className={s.label}>스트레스 수준 — {form.stressLevel}/5</label>
+                            <input type="range" min="1" max="5" name="stressLevel" value={form.stressLevel} onChange={upd} className={s.rangeInput} />
+                        </div>
+                    </div>
+
+                    {error && (
+                        <div className={s.errorBox}>
+                            <p className={s.errorMsg}>{error}</p>
+                            {errDetail && <p className={s.errorDetail}>{errDetail}</p>}
+                        </div>
+                    )}
+
+                    <button className={s.submitBtn} onClick={generate}>
+                        {mode === "daily" ? "오늘 하루 설계하기 →" : "주간 일정 설계하기 →"}
+                    </button>
+                </div>
+
+                {history.length > 0 && (
+                    <div className={s.historySection}>
+                        <hr className={s.divider} />
+                        <div className={s.historyHeader}>
+                            <span className={s.eyebrow}>저장된 플랜 — {history.length}</span>
+                        </div>
+                        {history.map(saved => (
+                            <div key={saved.id} className={s.historyItem} onClick={() => restorePlan(saved)}>
+                                <div className={s.historyMeta}>
+                                    <span className={s.historyMode}>{saved.mode === "daily" ? "하루" : "주간"}</span>
+                                    <span className={s.historyDate}>{formatDate(saved.createdAt)}</span>
+                                </div>
+                                <div className={s.historyRole}>{saved.role || "역할 미입력"}</div>
+                                {saved.goals && <div className={s.historyGoals}>{saved.goals.slice(0, 50)}{saved.goals.length > 50 ? "…" : ""}</div>}
+                                <button className={s.historyDelete} onClick={e => removePlan(e, saved.id)}>×</button>
+                            </div>
+                        ))}
                     </div>
                 )}
-
-                <button onClick={generate} style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", border: "none", borderRadius: 12, padding: 14, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>
-                    ✨ {mode === "daily" ? "오늘 하루" : "주간"} 스케줄 생성하기
-                </button>
             </div>
         </div>
     );
