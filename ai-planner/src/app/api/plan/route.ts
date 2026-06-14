@@ -3,9 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM_PROMPT = `전문 생산성 코치. 순수 JSON만 반환. 마크다운/설명 절대 금지.
+const DAILY_PROMPT = `전문 생산성 코치. 순수 JSON만 반환. 마크다운/설명 절대 금지.
 schedule 최대 8개. tip/reason 15자 이내. category: 집중|루틴|휴식|운동|학습|업무. priority: high|medium|low.
 {"summary":"...","dailyMantra":"...","priorities":[{"rank":1,"label":"...","reason":"...","emoji":"🎯"}],"schedule":[{"time":"07:00","duration":30,"task":"...","category":"집중","priority":"high","tip":"..."}],"energyMap":{"peak":"...","low":"...","advice":"..."},"promptTemplate":"..."}`;
+
+const WEEKLY_PROMPT = `전문 생산성 코치. 순수 JSON만 반환. 마크다운/설명 절대 금지.
+7일(월~일) 주간 목표 분배 계획. 시간표 아님 — 요일별 집중 테마와 할 일 목록.
+각 day의 tasks 최대 4개. tip 15자 이내. category: 집중|루틴|휴식|운동|학습|업무. priority: high|medium|low. energy: high|medium|low.
+{"summary":"...","weeklyMantra":"...","weekGoals":[{"rank":1,"label":"...","reason":"...","emoji":"🎯"}],"days":[{"day":"월","focus":"이날의 테마","energy":"high","tasks":[{"label":"...","category":"집중","priority":"high"}],"tip":"..."},{"day":"화","focus":"...","energy":"medium","tasks":[{"label":"...","category":"루틴","priority":"medium"}],"tip":"..."},{"day":"수","focus":"...","energy":"high","tasks":[{"label":"...","category":"집중","priority":"high"}],"tip":"..."},{"day":"목","focus":"...","energy":"medium","tasks":[{"label":"...","category":"학습","priority":"medium"}],"tip":"..."},{"day":"금","focus":"...","energy":"medium","tasks":[{"label":"...","category":"업무","priority":"high"}],"tip":"..."},{"day":"토","focus":"...","energy":"low","tasks":[{"label":"...","category":"휴식","priority":"low"}],"tip":"..."},{"day":"일","focus":"...","energy":"low","tasks":[{"label":"...","category":"루틴","priority":"low"}],"tip":"..."}],"energyMap":{"peak":"...","low":"...","advice":"..."},"promptTemplate":"..."}`;
 
 function repairJson(raw: string): string {
     let text = raw.replace(/```[\w]*\n?/g, "").trim();
@@ -27,12 +32,14 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "message 필드가 없습니다" }, { status: 400 });
         }
 
+        const systemPrompt = mode === "weekly" ? WEEKLY_PROMPT : DAILY_PROMPT;
+
         const response = await client.messages.create({
             model: "claude-sonnet-4-6",
-            max_tokens: 3000,
-            system: SYSTEM_PROMPT,
+            max_tokens: 4000,
+            system: systemPrompt,
             messages: [{ role: "user", content: message }],
-        });
+        }, { timeout: 55_000 });
 
         if (!response.content?.length) {
             return NextResponse.json(
