@@ -15,6 +15,7 @@ import {
   type DailyChecklist,
   type UserRole,
 } from "@/lib/checklist";
+import { createClient } from "@/lib/supabase";
 
 type Category = keyof typeof CAT;
 type PriKey   = keyof typeof PRI;
@@ -97,13 +98,28 @@ export default function App() {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [role, setRole]               = useState<UserRole>("free");
   const [checklist, setChecklist]     = useState<DailyChecklist | null>(null);
+  const [userEmail, setUserEmail]     = useState<string | null>(null);
 
   const isPro = role === "pro" || role === "dev";
 
   useEffect(() => {
     setHistory(loadHistory());
     setUsageCount(getTodayCount());
-    setRole(getRole());
+
+    const supabase = createClient();
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) {
+        setRole(getRole());
+        return;
+      }
+      setUserEmail(user.email ?? null);
+      const { data } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+      setRole((data?.role as UserRole | null) ?? "free");
+    });
   }, []);
 
   const upd = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
@@ -168,6 +184,13 @@ export default function App() {
 
   const remaining = Math.max(0, FREE_LIMIT - usageCount);
 
+  const handleLogout = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setUserEmail(null);
+    setRole("free");
+  };
+
   /* ── Top Bar ── */
   const topBar = (
     <div className={s.topBar}>
@@ -180,7 +203,14 @@ export default function App() {
       )}
       <div className={s.topActions}>
         {isPro && <Link href="/stats" className={s.topBtn}>통계</Link>}
-        {role !== "dev" && <Link href="/login" className={s.topBtn}>로그인</Link>}
+        {userEmail ? (
+          <>
+            <span className={s.userEmail}>{userEmail.split("@")[0]}</span>
+            <button className={s.topBtn} onClick={handleLogout}>로그아웃</button>
+          </>
+        ) : (
+          <Link href="/login" className={s.topBtn}>로그인</Link>
+        )}
         {role === "free" && <Link href="/pricing" className={s.topBtnPro}>Pro</Link>}
       </div>
     </div>

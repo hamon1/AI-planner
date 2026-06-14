@@ -858,6 +858,16 @@
   border-color: var(--border);
 }
 
+.userEmail {
+  font-size: 11px;
+  color: var(--ink-subtle);
+  letter-spacing: 0.01em;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .topBtnPro {
   composes: topBtn;
   color: var(--accent-ink);

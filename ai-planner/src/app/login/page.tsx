@@ -1,14 +1,86 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase";
 import s from "./login.module.css";
 
 export default function LoginPage() {
-    const [tab, setTab]           = useState<"login" | "signup">("login");
-    const [email, setEmail]       = useState("");
-    const [password, setPassword] = useState("");
-    const [confirmPw, setConfirmPw] = useState("");
+    const [tab, setTab]               = useState<"login" | "signup">("login");
+    const [email, setEmail]           = useState("");
+    const [password, setPassword]     = useState("");
+    const [confirmPw, setConfirmPw]   = useState("");
+    const [loading, setLoading]       = useState(false);
+    const [error, setError]           = useState("");
+    const [message, setMessage]       = useState("");
+    const [redirectTo, setRedirectTo] = useState("/planner");
+
+    const router = useRouter();
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        setRedirectTo(params.get("redirect") ?? "/planner");
+        const err = params.get("error");
+        if (err === "auth_failed") setError("로그인에 실패했습니다. 다시 시도해주세요.");
+    }, []);
+
+    const handleEmailAuth = async () => {
+        const supabase = createClient();
+        if (!email || !password) { setError("이메일과 비밀번호를 입력해주세요."); return; }
+        if (tab === "signup" && password !== confirmPw) { setError("비밀번호가 일치하지 않습니다."); return; }
+        if (password.length < 8) { setError("비밀번호는 8자 이상이어야 합니다."); return; }
+
+        setLoading(true); setError(""); setMessage("");
+        try {
+            if (tab === "login") {
+                const { error } = await supabase.auth.signInWithPassword({ email, password });
+                if (error) throw error;
+                router.push(redirectTo);
+            } else {
+                const { error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: { emailRedirectTo: `${window.location.origin}/api/auth/callback` },
+                });
+                if (error) throw error;
+                setMessage("인증 메일을 보냈어요. 메일함을 확인해주세요.");
+            }
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : "오류가 발생했습니다.";
+            setError(
+                msg.includes("Invalid login") ? "이메일 또는 비밀번호가 올바르지 않습니다." :
+                msg.includes("already registered") ? "이미 가입된 이메일입니다." :
+                msg
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleGoogle = async () => {
+        const supabase = createClient();
+        setLoading(true); setError("");
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: "google",
+            options: {
+                redirectTo: `${window.location.origin}/api/auth/callback?redirect=${encodeURIComponent(redirectTo)}`,
+            },
+        });
+        if (error) { setError(error.message); setLoading(false); }
+    };
+
+    const handleForgotPassword = async () => {
+        const supabase = createClient();
+        if (!email) { setError("이메일을 먼저 입력해주세요."); return; }
+        setLoading(true); setError("");
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}/api/auth/callback`,
+        });
+        setLoading(false);
+        if (error) setError(error.message);
+        else setMessage("비밀번호 재설정 메일을 보냈어요.");
+    };
 
     return (
         <div className={s.page}>
@@ -23,31 +95,35 @@ export default function LoginPage() {
                 </div>
 
                 <div className={s.tabRow}>
-                    <button className={tab === "login" ? s.tabActive : s.tab} onClick={() => setTab("login")}>로그인</button>
+                    <button className={tab === "login" ? s.tabActive : s.tab} onClick={() => { setTab("login"); setError(""); setMessage(""); }}>로그인</button>
                     <div className={s.tabDivider} />
-                    <button className={tab === "signup" ? s.tabActive : s.tab} onClick={() => setTab("signup")}>회원가입</button>
+                    <button className={tab === "signup" ? s.tabActive : s.tab} onClick={() => { setTab("signup"); setError(""); setMessage(""); }}>회원가입</button>
                 </div>
 
                 <div className={s.form}>
                     <div className={s.field}>
                         <label className={s.label}>이메일</label>
-                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="hello@example.com" className={s.input} />
+                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="hello@example.com" className={s.input} autoComplete="email" />
                     </div>
                     <div className={s.field}>
                         <label className={s.label}>비밀번호</label>
-                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="8자 이상" className={s.input} />
+                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="8자 이상" className={s.input} autoComplete={tab === "login" ? "current-password" : "new-password"} />
                     </div>
                     {tab === "signup" && (
                         <div className={s.field}>
                             <label className={s.label}>비밀번호 확인</label>
-                            <input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="비밀번호 재입력" className={s.input} />
+                            <input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="비밀번호 재입력" className={s.input} autoComplete="new-password" />
                         </div>
                     )}
-                    <button className={s.submitBtn}>
-                        {tab === "login" ? "로그인하기 →" : "가입하기 →"}
+                    {error && <p style={{ margin: 0, fontSize: 13, color: "#dc2626", borderLeft: "3px solid #dc2626", paddingLeft: 10 }}>{error}</p>}
+                    {message && <p style={{ margin: 0, fontSize: 13, color: "#059669", borderLeft: "3px solid #059669", paddingLeft: 10 }}>{message}</p>}
+                    <button className={s.submitBtn} onClick={handleEmailAuth} disabled={loading}>
+                        {loading ? "처리 중..." : tab === "login" ? "로그인하기 →" : "가입하기 →"}
                     </button>
                     {tab === "login" && (
-                        <button className={s.forgotBtn}>비밀번호를 잊으셨나요?</button>
+                        <button className={s.forgotBtn} onClick={handleForgotPassword} disabled={loading}>
+                            비밀번호를 잊으셨나요?
+                        </button>
                     )}
                 </div>
 
@@ -57,7 +133,7 @@ export default function LoginPage() {
                     <hr className={s.orLine} />
                 </div>
 
-                <button className={s.googleBtn}>
+                <button className={s.googleBtn} onClick={handleGoogle} disabled={loading}>
                     <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                         <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
                         <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
@@ -69,7 +145,7 @@ export default function LoginPage() {
 
                 <p className={s.footer}>
                     {tab === "login" ? "계정이 없으신가요? " : "이미 계정이 있으신가요? "}
-                    <button className={s.footerLink} onClick={() => setTab(tab === "login" ? "signup" : "login")}>
+                    <button className={s.footerLink} onClick={() => { setTab(tab === "login" ? "signup" : "login"); setError(""); setMessage(""); }}>
                         {tab === "login" ? "회원가입" : "로그인"}
                     </button>
                 </p>
