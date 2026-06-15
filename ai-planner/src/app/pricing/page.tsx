@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase";
 import s from "./pricing.module.css";
 
 const FREE_FEATURES = [
@@ -35,8 +36,14 @@ export default function PricingPage() {
     const [openFaq, setOpenFaq] = useState<number | null>(null);
     const router = useRouter();
 
-    const handleProStart = () => {
-        router.push("/login?redirect=/pricing");
+    const handleProStart = async () => {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+            router.push("/login?redirect=/pricing");
+        } else {
+            router.push(`/checkout?plan=${billing}`);
+        }
     };
 
     const monthlyPrice  = 4900;
