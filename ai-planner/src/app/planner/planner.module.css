@@ -835,49 +835,83 @@
 
 .topActions {
   display: flex;
+  align-items: center;
   gap: 6px;
 }
 
+/* 기본 버튼 — 로그인·로그아웃·통계 */
 .topBtn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   background: none;
-  border: 1px solid var(--border-soft);
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ink-subtle);
+  border: 1.5px solid var(--border-soft);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--ink-muted);
   cursor: pointer;
-  min-height: 26px;
+  min-height: 32px;
   text-decoration: none;
-  transition: color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+  font-family: inherit;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
 
 .topBtn:hover {
   color: var(--ink);
   border-color: var(--border);
+  background: var(--surface);
 }
 
-.userEmail {
-  font-size: 11px;
-  color: var(--ink-subtle);
-  letter-spacing: 0.01em;
-  max-width: 80px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.topBtnPro {
+/* 로그아웃 버튼 — 빨간 호버 */
+.topBtnLogout {
   composes: topBtn;
-  color: var(--accent-ink);
-  border-color: var(--accent);
-  background: var(--accent-surface);
+}
+
+.topBtnLogout:hover {
+  color: #dc2626;
+  border-color: #fca5a5;
+  background: #fff5f5;
+}
+
+/* Pro 업그레이드 CTA — 가장 강조 */
+.topBtnPro {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ink);
+  border: 1.5px solid var(--ink);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  cursor: pointer;
+  min-height: 32px;
+  text-decoration: none;
+  white-space: nowrap;
+  font-family: inherit;
+  transition: background 0.12s, border-color 0.12s;
 }
 
 .topBtnPro:hover {
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* 로그인 유저 이름 */
+.userEmail {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-subtle);
+  letter-spacing: 0.01em;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
 }
 
 /* ─────────────────────────────

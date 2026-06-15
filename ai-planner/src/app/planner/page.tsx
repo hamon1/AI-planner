@@ -206,7 +206,7 @@ export default function App() {
         {userEmail ? (
           <>
             <span className={s.userEmail}>{userEmail.split("@")[0]}</span>
-            <button className={s.topBtn} onClick={handleLogout}>로그아웃</button>
+            <button className={s.topBtnLogout} onClick={handleLogout}>로그아웃</button>
           </>
         ) : (
           <Link href="/login" className={s.topBtn}>로그인</Link>
