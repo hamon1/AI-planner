@@ -1,0 +1,155 @@
+.bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #1a1a1a;
+  color: #fff;
+  padding: 12px 20px;
+  padding-bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 -1px 0 rgba(255,255,255,0.08), 0 -8px 32px rgba(0,0,0,0.3);
+  animation: slideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* ── 왼쪽: 태스크 정보 ── */
+.info {
+  flex: 1;
+  min-width: 0;
+}
+
+.taskName {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.phaseWork {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a78bfa;
+}
+
+.phaseBreak {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #86efac;
+}
+
+.phaseDone {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #86efac;
+}
+
+.pomos {
+  display: flex;
+  gap: 3px;
+}
+
+.pomoDot {
+  font-size: 8px;
+  color: rgba(255,255,255,0.25);
+}
+
+.pomoDotDone {
+  font-size: 8px;
+  color: #a78bfa;
+}
+
+/* ── 가운데: 진행 바 ── */
+.progressWrap {
+  flex: 1;
+  min-width: 60px;
+  max-width: 160px;
+}
+
+.progressTrack {
+  height: 3px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 1s linear;
+}
+
+.progressFillWork  { background: #a78bfa; }
+.progressFillBreak { background: #86efac; }
+
+/* ── 오른쪽: 시간 + 컨트롤 ── */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.time {
+  font-family: monospace;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  min-width: 52px;
+  text-align: right;
+}
+
+.btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s;
+}
+
+.btn:hover { background: rgba(255,255,255,0.18); }
+
+.btnStop {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.4);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.12s;
+}
+
+.btnStop:hover { color: #fff; }

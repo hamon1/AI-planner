@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { ChangeEvent } from "react";
 import Link from "next/link";
 import s from "./planner.module.css";
@@ -16,6 +16,8 @@ import {
   type UserRole,
 } from "@/lib/checklist";
 import { createClient } from "@/lib/supabase";
+import { useTimer } from "@/hooks/useTimer";
+import TimerBar from "@/components/timer/TimerBar";
 
 type Category = keyof typeof CAT;
 type PriKey   = keyof typeof PRI;
@@ -99,8 +101,10 @@ export default function App() {
   const [role, setRole]               = useState<UserRole>("free");
   const [checklist, setChecklist]     = useState<DailyChecklist | null>(null);
   const [userEmail, setUserEmail]     = useState<string | null>(null);
+  const [activeTaskIdx, setActiveTaskIdx] = useState<number | null>(null);
 
   const isPro = role === "pro" || role === "dev";
+  const pomodoro = useTimer();
 
   useEffect(() => {
     setHistory(loadHistory());
@@ -181,6 +185,28 @@ export default function App() {
 
   const restorePlan = (saved: SavedPlan) => { setMode(saved.mode); setResult(saved.plan); setChecklist(null); setTab("schedule"); setStep("result"); };
   const removePlan  = (e: React.MouseEvent, id: string) => { e.stopPropagation(); setHistory(deleteFromHistory(id)); };
+
+  // 타이머 idle/done 상태에서 activeTaskIdx 초기화
+  useEffect(() => {
+    if (pomodoro.state.phase === "idle" || pomodoro.state.phase === "done") {
+      setActiveTaskIdx(null);
+    }
+  }, [pomodoro.state.phase]);
+
+  const handleTaskClick = useCallback((it: ScheduleItem, idx: number) => {
+    if (!isPro) { setShowUpgrade(true); return; }
+    const isRunning = pomodoro.state.phase !== "idle" && pomodoro.state.phase !== "done";
+    if (isRunning && activeTaskIdx !== idx) {
+      if (!window.confirm(`"${pomodoro.state.task?.name}" 타이머를 중단하고 새로 시작할까요?`)) return;
+    }
+    setActiveTaskIdx(idx);
+    pomodoro.start(it.task, it.category, it.duration);
+  }, [isPro, pomodoro, activeTaskIdx]);
+
+  const handleTimerStop = useCallback(() => {
+    setActiveTaskIdx(null);
+    pomodoro.stop();
+  }, [pomodoro]);
 
   const remaining = Math.max(0, FREE_LIMIT - usageCount);
 
@@ -270,10 +296,12 @@ export default function App() {
     const doneCount = checklist?.items.filter(it => it.done).length ?? 0;
     const totalCount = checklist?.items.length ?? 0;
 
+    const timerVisible = pomodoro.state.phase !== "idle";
+
     return (
       <div className={s.page}>
         {upgradeModal}
-        <div className={s.wrap}>
+        <div className={timerVisible ? s.wrapTimerPad : s.wrap}>
           {topBar}
           <div className={s.resultMeta}>
             <span className={s.eyebrow}>{weekly ? "Weekly Plan" : "Today's Plan"}</span>
@@ -295,7 +323,18 @@ export default function App() {
           </div>
 
           {!weekly && tab === "schedule" && (result as DailyPlan).schedule.map((it, i) => (
-            <div key={i} className={s.scheduleItem}>
+            <div
+              key={i}
+              className={[
+                s.scheduleItem,
+                isPro ? s.scheduleItemClickable : "",
+                activeTaskIdx === i ? s.scheduleItemActive : "",
+              ].join(" ")}
+              onClick={() => handleTaskClick(it, i)}
+              role={isPro ? "button" : undefined}
+              tabIndex={isPro ? 0 : undefined}
+              onKeyDown={isPro ? (e) => { if (e.key === "Enter" || e.key === " ") handleTaskClick(it, i); } : undefined}
+            >
               <div className={s.timeCol}>
                 <div className={s.timeText}>{it.time}</div>
                 <div className={s.durationText}>{it.duration}분</div>
@@ -308,6 +347,11 @@ export default function App() {
                 </div>
                 {it.tip && <p className={s.taskTip}>→ {it.tip}</p>}
               </div>
+              {isPro && (
+                <div className={activeTaskIdx === i ? s.timerBtnActive : s.timerBtn}>
+                  {activeTaskIdx === i ? "⏱" : "▶"}
+                </div>
+              )}
             </div>
           ))}
 
@@ -398,6 +442,12 @@ export default function App() {
             </div>
           )}
         </div>
+      <TimerBar
+        state={pomodoro.state}
+        onPause={pomodoro.pause}
+        onResume={pomodoro.resume}
+        onStop={handleTimerStop}
+      />
       </div>
     );
   }

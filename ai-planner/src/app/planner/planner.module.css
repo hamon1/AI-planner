@@ -400,11 +400,77 @@
 /* ─────────────────────────────
    Schedule
 ───────────────────────────── */
+/* 타이머 바 표시 시 페이지 하단 여백 */
+.wrapTimerPad {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 28px 20px 100px;
+}
+
+@media (min-width: 640px) {
+  .wrapTimerPad { padding: 40px 32px 100px; }
+}
+
 .scheduleItem {
   display: flex;
   gap: 14px;
   padding: 14px 0;
   border-bottom: 1px solid var(--border-soft);
+  transition: background 0.12s;
+}
+
+.scheduleItemClickable {
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 0 -8px;
+  padding: 14px 8px;
+}
+
+.scheduleItemClickable:hover {
+  background: var(--accent-surface);
+}
+
+.scheduleItemActive {
+  background: var(--accent-surface) !important;
+  border-left: 3px solid var(--accent-hover);
+  padding-left: 5px;
+}
+
+/* 타이머 시작 버튼 (아이템 우측) */
+.timerBtn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-soft);
+  background: none;
+  color: var(--ink-subtle);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.scheduleItemClickable:hover .timerBtn {
+  opacity: 1;
+}
+
+.timerBtnActive {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent-hover);
+  background: var(--accent-surface);
+  color: var(--accent-ink);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
 }
 
 .timeCol {
