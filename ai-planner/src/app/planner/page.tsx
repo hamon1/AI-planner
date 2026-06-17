@@ -5,8 +5,6 @@ import type { ChangeEvent } from "react";
 import Link from "next/link";
 import s from "./planner.module.css";
 import {
-  getRole,
-  getIsPro,
   isDev,
   getChecklist,
   createChecklist,
@@ -15,7 +13,6 @@ import {
   type DailyChecklist,
   type UserRole,
 } from "@/lib/checklist";
-import { createClient } from "@/lib/supabase";
 import { useTimer } from "@/hooks/useTimer";
 import TimerBar from "@/components/timer/TimerBar";
 
@@ -98,9 +95,8 @@ export default function App() {
   const [copiedDay, setCopiedDay] = useState<string | null>(null);
   const [usageCount, setUsageCount]   = useState(0);
   const [showUpgrade, setShowUpgrade] = useState(false);
-  const [role, setRole]               = useState<UserRole>("free");
+  const [role, setRole]               = useState<UserRole>("pro");
   const [checklist, setChecklist]     = useState<DailyChecklist | null>(null);
-  const [userEmail, setUserEmail]     = useState<string | null>(null);
   const [activeTaskIdx, setActiveTaskIdx] = useState<number | null>(null);
 
   const isPro = role === "pro" || role === "dev";
@@ -109,21 +105,7 @@ export default function App() {
   useEffect(() => {
     setHistory(loadHistory());
     setUsageCount(getTodayCount());
-
-    const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) {
-        setRole(getRole());
-        return;
-      }
-      setUserEmail(user.email ?? null);
-      const { data } = await supabase
-        .from("users")
-        .select("role")
-        .eq("id", user.id)
-        .single();
-      setRole((data?.role as UserRole | null) ?? "free");
-    });
+    if (isDev()) setRole("dev");
   }, []);
 
   const upd = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
@@ -131,7 +113,7 @@ export default function App() {
 
   const generate = async () => {
     if (!form.role && !form.goals) { setError("직업/역할 또는 목표를 입력해주세요."); return; }
-    if (!isPro && usageCount >= FREE_LIMIT) { setShowUpgrade(true); return; }
+    if (role !== "dev" && usageCount >= FREE_LIMIT) { setShowUpgrade(true); return; }
     setError(""); setErrDetail(""); setStep("loading");
     const msg = `[${mode === "daily" ? "오늘" : "이번주"} 스케줄]\n직업:${form.role || "미입력"}\n목표:${form.goals || "미입력"}\n성향:${form.personality || "없음"}\n제약:${form.constraints || "없음"}\n기상:${form.wakeTime}/취침:${form.sleepTime}\n에너지:${form.energyType}/스트레스:${form.stressLevel}/5\nJSON만 반환`;
     try {
@@ -143,7 +125,7 @@ export default function App() {
         if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
         const entry: SavedPlan = { id: Date.now().toString(), createdAt: new Date().toISOString(), mode, role: form.role, goals: form.goals, plan: data };
         setHistory(saveToHistory(entry));
-        if (!isPro) setUsageCount(incrementCount());
+        if (role !== "dev") setUsageCount(incrementCount());
         setResult(data);
         setChecklist(null);
         setTab("schedule");
@@ -210,34 +192,17 @@ export default function App() {
 
   const remaining = Math.max(0, FREE_LIMIT - usageCount);
 
-  const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    setUserEmail(null);
-    setRole("free");
-  };
-
   /* ── Top Bar ── */
   const topBar = (
     <div className={s.topBar}>
       {role === "dev" ? (
         <span className={s.devBadge}>DEV</span>
-      ) : role === "pro" ? (
-        <span className={s.proBadge}>Pro ✓</span>
       ) : (
         <span className={s.usageBadge}>남은 횟수 {remaining} / {FREE_LIMIT}</span>
       )}
       <div className={s.topActions}>
-        {isPro && <Link href="/stats" className={s.topBtn}>통계</Link>}
-        {userEmail ? (
-          <>
-            <span className={s.userEmail}>{userEmail.split("@")[0]}</span>
-            <button className={s.topBtnLogout} onClick={handleLogout}>로그아웃</button>
-          </>
-        ) : (
-          <Link href="/login" className={s.topBtn}>로그인</Link>
-        )}
-        {role === "free" && <Link href="/pricing" className={s.topBtnPro}>Pro</Link>}
+        <Link href="/features" className={s.topBtn}>기능 안내</Link>
+        <Link href="/stats" className={s.topBtn}>통계</Link>
       </div>
     </div>
   );
@@ -247,21 +212,11 @@ export default function App() {
     <div className={s.modalOverlay} onClick={() => setShowUpgrade(false)}>
       <div className={s.modal} onClick={e => e.stopPropagation()}>
         <button className={s.modalClose} onClick={() => setShowUpgrade(false)}>×</button>
-        <p className={s.modalEyebrow}>무료 횟수 소진</p>
-        <h2 className={s.modalTitle}>오늘 무료 생성을<br />모두 사용했어요</h2>
-        <div className={s.planCompare}>
-          <div className={s.planRow}>
-            <span className={s.planName}>무료</span>
-            <span className={s.planLimit}>하루 {FREE_LIMIT}회</span>
-          </div>
-          <div className={s.planRowPro}>
-            <span className={s.planName}>Pro</span>
-            <span className={s.planLimit}>무제한 ✓</span>
-          </div>
-        </div>
-        <Link href="/pricing" className={s.upgradeCta} style={{ display: "block", textAlign: "center", textDecoration: "none" }}>
-          Pro 업그레이드 — 월 4,900원
-        </Link>
+        <p className={s.modalEyebrow}>오늘 횟수 소진</p>
+        <h2 className={s.modalTitle}>오늘 생성 횟수를<br />모두 사용했어요</h2>
+        <p style={{ fontSize: 14, color: "var(--ink-muted)", marginBottom: 28, lineHeight: 1.6 }}>
+          매일 자정에 {FREE_LIMIT}회가 초기화됩니다.
+        </p>
         <button className={s.modalDismiss} onClick={() => setShowUpgrade(false)}>내일 다시 시도하기</button>
       </div>
     </div>

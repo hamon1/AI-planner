@@ -1,6 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase, createAdminSupabase } from "@/lib/supabase-server";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -25,39 +24,12 @@ function repairJson(raw: string): string {
     return text;
 }
 
-const FREE_LIMIT = 3;
-
 export async function POST(req: NextRequest) {
     try {
         const { message, mode } = await req.json() as { message: string; mode: string };
 
         if (!message) {
             return NextResponse.json({ error: "message 필드가 없습니다" }, { status: 400 });
-        }
-
-        // ── 로그인 유저: 서버사이드 사용량 체크 ──
-        try {
-            const supabase = await createServerSupabase();
-            const { data: { user } } = await supabase.auth.getUser();
-
-            if (user) {
-                const admin = createAdminSupabase();
-                const { data: userData } = await admin
-                    .from("users").select("role").eq("id", user.id).single();
-                const role = userData?.role ?? "free";
-
-                if (role === "free") {
-                    const today = new Date().toISOString().slice(0, 10);
-                    const { data: usage } = await admin
-                        .from("usage").select("count").eq("user_id", user.id).eq("date", today).single();
-                    if ((usage?.count ?? 0) >= FREE_LIMIT) {
-                        return NextResponse.json({ error: "오늘 무료 생성 횟수를 모두 사용했습니다." }, { status: 429 });
-                    }
-                    await admin.rpc("increment_usage", { p_user_id: user.id, p_date: today });
-                }
-            }
-        } catch {
-            // Supabase 미연동 환경에서는 클라이언트 측 제한으로 폴백
         }
 
         const systemPrompt = mode === "weekly" ? WEEKLY_PROMPT : DAILY_PROMPT;
