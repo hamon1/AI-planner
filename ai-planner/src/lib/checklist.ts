@@ -29,16 +29,25 @@ const DAY_LABELS: Record<number, string> = { 0: "일", 1: "월", 2: "화", 3: "�
 
 export function getRole(): UserRole {
   try {
-    const r = localStorage.getItem(ROLE_KEY)
-    if (r === "pro" || r === "dev") return r
+    // dev는 sessionStorage만 — 탭 닫으면 해제
+    if (sessionStorage.getItem(ROLE_KEY) === "dev") return "dev"
+    // localStorage에 남은 과거 "dev" 값 정리
+    if (localStorage.getItem(ROLE_KEY) === "dev") localStorage.removeItem(ROLE_KEY)
+    // pro는 localStorage — 영구 유지
+    if (localStorage.getItem(ROLE_KEY) === "pro") return "pro"
     return "free"
   } catch { return "free" }
 }
 
 export function setRole(role: UserRole): void {
   try {
-    if (role === "free") localStorage.removeItem(ROLE_KEY)
-    else localStorage.setItem(ROLE_KEY, role)
+    if (role === "dev") {
+      sessionStorage.setItem(ROLE_KEY, "dev")
+    } else {
+      sessionStorage.removeItem(ROLE_KEY)
+      if (role === "free") localStorage.removeItem(ROLE_KEY)
+      else localStorage.setItem(ROLE_KEY, role)  // "pro"
+    }
   } catch { /* noop */ }
 }
 
