@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { getIsPro, getWeekStats, type DayStats } from "@/lib/checklist";
+import { getWeekStats, type DayStats } from "@/lib/checklist";
 import s from "./stats.module.css";
 
 const CAT_COLOR: Record<string, string> = {
@@ -13,7 +13,6 @@ const CAT_COLOR: Record<string, string> = {
 interface FeedbackResult { summary: string; insights: string[]; tips: string[] }
 
 export default function StatsPage() {
-  const [isPro, setIsPro]         = useState(false);
   const [mounted, setMounted]     = useState(false);
   const [stats, setStats]         = useState<DayStats[]>([]);
   const [feedback, setFeedback]   = useState<FeedbackResult | null>(null);
@@ -21,30 +20,11 @@ export default function StatsPage() {
   const [fbError, setFbError]     = useState("");
 
   useEffect(() => {
-    setIsPro(getIsPro());
     setStats(getWeekStats());
     setMounted(true);
   }, []);
 
   if (!mounted) return null;
-
-  if (!isPro) {
-    return (
-      <div className={s.page}>
-        <div className={s.wrap}>
-          <Link href="/planner" className={s.back}>← 플래너로 돌아가기</Link>
-          <div className={s.upgradePage}>
-            <div className={s.upgradeIcon}>📊</div>
-            <h1 className={s.upgradeTitle}>Pro 전용 기능</h1>
-            <p className={s.upgradeDesc}>
-              실행률 분석과 AI 주간 피드백은<br />Pro 플랜에서만 사용할 수 있어요.
-            </p>
-            <Link href="/pricing" className={s.upgradeBtn}>Pro 시작하기 →</Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const today        = new Date().toISOString().slice(0, 10);
   const todayStat    = stats.find(s => s.date === today);
@@ -91,7 +71,7 @@ export default function StatsPage() {
         <Link href="/planner" className={s.back}>← 플래너로 돌아가기</Link>
 
         <div className={s.header}>
-          <span className={s.eyebrow}>Pro · Stats</span>
+          <span className={s.eyebrow}>Stats</span>
           <h1 className={s.title}>실행률 분석</h1>
         </div>
 
