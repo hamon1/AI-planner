@@ -36,15 +36,22 @@ export default function LoginPage() {
             if (tab === "login") {
                 const { error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
+                await fetch("/api/auth/ensure-user", { method: "POST" });
                 router.push(redirectTo);
             } else {
-                const { error } = await supabase.auth.signUp({
+                const { data, error } = await supabase.auth.signUp({
                     email,
                     password,
                     options: { emailRedirectTo: `${window.location.origin}/api/auth/callback` },
                 });
                 if (error) throw error;
-                setMessage("인증 메일을 보냈어요. 메일함을 확인해주세요.");
+                // 이메일 인증 불필요 설정 시 세션이 즉시 생성됨
+                if (data.session) {
+                    await fetch("/api/auth/ensure-user", { method: "POST" });
+                    router.push(redirectTo);
+                } else {
+                    setMessage("인증 메일을 보냈어요. 메일함을 확인해주세요.");
+                }
             }
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : "오류가 발생했습니다.";
